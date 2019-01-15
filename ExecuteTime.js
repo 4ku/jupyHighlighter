@@ -17,6 +17,7 @@ define([
     var mod_name = 'ExecuteTime';
     var log_prefix = '[' + mod_name + ']';
     var CodeCell = codecell.CodeCell;
+    var blink=0;
 
     function patch_CodeCell_get_callbacks () {
         console.log(log_prefix, 'patching CodeCell.prototype.get_callbacks');
@@ -27,17 +28,22 @@ define([
             var cell = this;
             var prev_reply_callback = callbacks.shell.reply;
             callbacks.shell.reply = function (msg) {
-                // console.log(log_prefix, JSON.stringify(msg));
                 if (msg.msg_type === 'execute_reply') {
                     setTimeout( function(){
-                    // console.log(log_prefix, JSON.stringify(Jupyter.notebook.get_prev_cell(Jupyter.notebook.get_selected_cell()).output_area.outputs[0]));
                         if ($.ui !== undefined) {
                             var input_area = cell.element.find('.input_area')
-                            if((cell.output_area.outputs === undefined || cell.output_area.outputs.length == 0) || cell.output_area.outputs[0].output_type != 'error'){
-                                input_area.stop(true,true).show(0).effect('highlight', {color: '#00bb00'});
-                            } else{
-                                input_area.stop(true,true).show(0).effect('highlight', {color: '#cc0000'});
-                            }                            
+                            var color;
+                            
+                            blink=0;
+                            if((cell.output_area.outputs === undefined ||
+                                 cell.output_area.outputs.length == 0) ||
+                                  cell.output_area.outputs[0].output_type != 'error') color = '#00bb00'
+                            else color = '#cc0000'
+
+                            input_area.stop(true,true);
+                            input_area[0].style.opacity = 1;
+                            input_area[0].style.backgroundColor = "#ffffff";            
+                            input_area.show(0).effect('highlight', {color: color});                            
                         }
                       }, 5 );
                 }
@@ -50,38 +56,26 @@ define([
 
     function excute_codecell_callback (evt, data) {
         var cell = data.cell;
-        cell.metadata.ExecuteTime = {start_time: moment().toISOString()};
-
-        update_timing_area(cell);
-
-    }
-    function update_timing_area (cell) {
-        if (! (cell instanceof CodeCell) ||
-                 !cell.metadata.ExecuteTime ||
-                 !cell.metadata.ExecuteTime.start_time) {
-            return $();
+        blink=1;
+        var input_area = cell.element.find('.input_area')            
+        function initpulse(){
+            input_area.fadeTo(1480, 0.03,after1)
         }
-
-        var timing_area = cell.element.find('.timing_area');
-        if (timing_area.length < 1) {
-            timing_area = $('<div/>')
-                .addClass('timing_area' + (options.display_right_aligned ? ' text-right' : ''))
-                .on('dblclick', function (evt) { toggle_timing_display([cell]); })
-                .appendTo(cell.element.find('.input_area'));
+        function after1(){
+            if(blink == 1){
+                input_area[0].style.backgroundColor = "#42A5F5";
+                pulsatingIn();
+            }
         }
-
-        var start_time = moment(cell.metadata.ExecuteTime.start_time),
-              end_time = cell.metadata.ExecuteTime.end_time;
-        var msg = options.template[end_time ? 'executed' : 'queued'];
-        msg = msg.replace('${start_time}', format_moment(start_time));
-        if (end_time) {
-            end_time = moment(end_time);
-            msg = msg.replace('${end_time}', format_moment(end_time));
-            var exec_time = -start_time.diff(end_time);
-            msg = msg.replace('${duration}', humanized_duration(exec_time));
+        function pulsatingOut(){
+            if(blink ==1) input_area.fadeTo(1400, 0.1, pulsatingIn);
         }
-        timing_area.text(msg);
-        return timing_area;
+        function pulsatingIn(){
+            if(blink ==1) input_area.fadeTo(2500, 1, pulsatingOut);
+        }
+        
+        initpulse();
+
     }
 
     function load_jupyter_extension () {
@@ -98,7 +92,7 @@ define([
         Jupyter.notebook.config.loaded.then(function () {
 
             patch_CodeCell_get_callbacks();
-            events.on('execute.CodeCell', excute_codecell_callback );
+            events.on('execute.CodeCell', excute_codecell_callback);
 
         }).catch(function on_error (reason) {
             console.error(log_prefix, 'Error:', reason);
