@@ -1,0 +1,37 @@
+Type: IPython Notebook Extension
+Name: Lighter
+Description: Higlighting cells
+# Link: readme.md
+Icon: icon.png
+Main: Lighter.js
+Compatibility: 4.x, 5.x
+Parameters:
+
+- name: Lighter.colors.successful_exec
+  description: |
+    Color to use for highlighting successful finish after execution
+  default: '#00BB00'
+  input_type: color
+
+- name: Lighter.colors.error_exec
+  description: |
+    Color to use for highlighting fail finish after execution
+  default: '#cc0000'
+  input_type: color
+
+  - name: Lighter.colors.execution
+  description: |
+    Color to use for highlighting during execution
+  default: '#42A5F5'
+  input_type: color
+
+- name: toogle_plugin_hotkey
+  description: Hotkey combination to which to bind plugin-toggling
+  input_type: hotkey
+  default: Alt-N
+  
+- name: button_enable
+  description: Enable the button to toogle plugin
+  input_type: checkbox
+  default: true
+

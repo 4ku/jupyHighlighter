@@ -14,10 +14,23 @@ define([
     codecell
 ) {
     'use strict';
-    var mod_name = 'ExecuteTime';
+    var mod_name = 'Lighter';
     var log_prefix = '[' + mod_name + ']';
     var CodeCell = codecell.CodeCell;
     var blink=0;
+    var plugin_status = true;
+
+    var button;
+
+    var params = {
+        colors:{
+            successful_exec: '#00BB00',
+            error_exec: '#cc0000',
+            execution: '#42A5F5'
+        },
+        toogle_plugin_hotkey : 'Alt-N',
+        button_enable : true
+    };
 
     function patch_CodeCell_get_callbacks () {
         console.log(log_prefix, 'patching CodeCell.prototype.get_callbacks');
@@ -28,7 +41,7 @@ define([
             var cell = this;
             var prev_reply_callback = callbacks.shell.reply;
             callbacks.shell.reply = function (msg) {
-                if (msg.msg_type === 'execute_reply') {
+                if (plugin_status && msg.msg_type === 'execute_reply') {
                     setTimeout( function(){
                         if ($.ui !== undefined) {
                             var input_area = cell.element.find('.input_area')
@@ -55,6 +68,8 @@ define([
     }
 
     function excute_codecell_callback (evt, data) {
+        if(!plugin_status) return;
+
         var cell = data.cell;
         blink=1;
         var input_area = cell.element.find('.input_area')            
@@ -78,7 +93,62 @@ define([
 
     }
 
+
+
+    var update_params = function() {
+        var config = Jupyter.notebook.config;
+        for (var key in params) {
+            if (config.data.hasOwnProperty(key) ){
+                params[key] = config.data[key];
+            }
+        }
+    };
+
+    var toggle_all = function() {
+        plugin_status = !plugin_status;
+        change_button_color();
+    };
+
+    var change_button_color = function() {
+        var button = document.getElementsByClassName("fa fa-bomb")[0].parentNode;
+        if(plugin_status){
+            button.style.backgroundColor = "#baffc9";
+        } else{
+            button.style.backgroundColor = "#ffffff";            
+        }
+    };
+
+    // define action, register with ActionHandler instance
+    var prefix = 'auto';
+    var action_name = 'toogle_plugin';
+    var action = {
+        icon: 'fa fa-bomb',
+        help: 'Turn on/off highlighting',
+        help_index : 'zz',
+        id: 'toggle_plugin',
+        handler: toggle_all
+    };
+    var action_full_name;
+
+
+
     function load_jupyter_extension () {
+        
+        update_params();
+        action_full_name = Jupyter.keyboard_manager.actions.register(action, action_name, prefix);
+        
+        // create toolbar button
+        if(params.button_enable) Jupyter.toolbar.add_buttons_group([action_full_name]);
+        change_button_color();
+        
+        // define hotkey
+        if (params.toogle_plugin_hotkey) {
+            Jupyter.keyboard_manager.edit_shortcuts.add_shortcut(
+                params.toogle_plugin_hotkey, action_full_name);
+            Jupyter.keyboard_manager.command_shortcuts.add_shortcut(
+                params.toogle_plugin_hotkey, action_full_name);
+        }
+        
         // try to load jquery-ui
         if ($.ui === undefined) {
             requirejs(['jquery-ui'], function ($) {}, function (err) {
