@@ -19,14 +19,14 @@ define([
     var CodeCell = codecell.CodeCell;
     var blink=0;
     var plugin_status = true;
-
-    var button;
+    var stack = [];
 
     var params = {
         colors:{
             successful_exec: '#00BB00',
             error_exec: '#cc0000',
-            execution: '#42A5F5'
+            execution: '#42A5F5',
+            waiting: '#FFFF66'
         },
         toogle_plugin_hotkey : 'Alt-N',
         button_enable : true
@@ -36,64 +36,110 @@ define([
         console.log(log_prefix, 'patching CodeCell.prototype.get_callbacks');
         var old_get_callbacks = CodeCell.prototype.get_callbacks;
         CodeCell.prototype.get_callbacks = function () {
+            
             var callbacks = old_get_callbacks.apply(this, arguments);
-
             var cell = this;
             var prev_reply_callback = callbacks.shell.reply;
             callbacks.shell.reply = function (msg) {
-                if (plugin_status && msg.msg_type === 'execute_reply') {
+                console.log(msg.msg_type);
+                if (msg.msg_type === 'execute_reply') {
                     setTimeout( function(){
+                        
                         if ($.ui !== undefined) {
-                            var input_area = cell.element.find('.input_area')
+                            stack.shift();
+                            if(stack.length !=0){
+                                stack[0].element.find('.input_area').stop(true,false);
+                                create_blink(0);
+                            };
+                            
+                            var input_area = cell.element.find('.input_area');
+                            input_area[0].title=0;                            
                             var color;
                             
-                            blink=0;
-                            if((cell.output_area.outputs === undefined ||
-                                 cell.output_area.outputs.length == 0) ||
-                                  cell.output_area.outputs[0].output_type != 'error') color = '#00bb00'
-                            else color = '#cc0000'
-
-                            input_area.stop(true,true);
+                            input_area.stop(true, false);
                             input_area[0].style.opacity = 1;
-                            input_area[0].style.backgroundColor = "#ffffff";            
-                            input_area.show(0).effect('highlight', {color: color});                            
+                            input_area[0].style.backgroundColor = "#F7F7F7";
+
+                            if((cell.output_area.outputs === undefined ||
+                                cell.output_area.outputs.length == 0) ||
+                                 cell.output_area.outputs[0].output_type != 'error') color = params.colors.successful_exec
+                           else color = params.colors.error_exec;
+
+                            if(plugin_status)input_area.show(0).effect('highlight', {color: color});                            
                         }
                       }, 5 );
                 }
-
                 return prev_reply_callback(msg);
             };
             return callbacks;
         };
     }
 
-    function excute_codecell_callback (evt, data) {
-        if(!plugin_status) return;
-
-        var cell = data.cell;
-        blink=1;
-        var input_area = cell.element.find('.input_area')            
+    function create_blink (num){
+        var fadeto = 0.1;
+        if(num==0) fadeto = 0.35;
+        var input_area = stack[num].element.find('.input_area');           
+        
         function initpulse(){
             input_area.fadeTo(1480, 0.03,after1)
         }
-        function after1(){
-            if(blink == 1){
-                input_area[0].style.backgroundColor = "#42A5F5";
+        function after1(){                               
+            if(input_area[0].title == 1){
+                var color;
+                if(num==0)color = params.colors.execution
+                    else color = params.colors.waiting;
+                input_area[0].style.backgroundColor = color;
                 pulsatingIn();
+            } else{
+                input_area.stop(true,false); 
+                input_area[0].style.opacity = 1;
+                input_area[0].style.backgroundColor = "#F7F7F7";
+            }
+        }
+        function pulsatingIn(){
+            if(input_area[0].title == 1)
+                input_area.fadeTo(2500, 1, pulsatingOut)
+            else{
+                input_area.stop(true,false);                 
+                input_area[0].style.opacity = 1;
+                input_area[0].style.backgroundColor = "#F7F7F7";
             }
         }
         function pulsatingOut(){
-            if(blink ==1) input_area.fadeTo(1400, 0.1, pulsatingIn);
+            if(input_area[0].title == 1) 
+                input_area.fadeTo(1400, fadeto, pulsatingIn)
+            else{
+                input_area.stop(true,false);                                
+                input_area[0].style.opacity = 1;
+                input_area[0].style.backgroundColor = "#F7F7F7";
+            }
         }
-        function pulsatingIn(){
-            if(blink ==1) input_area.fadeTo(2500, 1, pulsatingOut);
+        if(input_area[0].title == 1)
+             initpulse()
+        else{
+            input_area.stop(true,false); 
+            input_area[0].style.opacity = 1;
+            input_area[0].style.backgroundColor = "#F7F7F7";
         }
-        
-        initpulse();
-
     }
 
+    function excute_codecell_callback (evt, data) {
+        if(!plugin_status) return;
+        var cell = data.cell;
+        cell.element.find('.input_area')[0].title=1;                                    
+        for(var i=0; i<stack.length;i++){
+            if(cell.cell_id == stack[i].cell_id){
+                stack.splice(i,1);
+                if(i==0){
+                    stack[0].element.find('.input_area')[0].style.backgroundColor = params.colors.execution;
+                }
+                break;
+            }
+        }
+        stack.push(cell);
+        create_blink(stack.length-1);
 
+    }
 
     var update_params = function() {
         var config = Jupyter.notebook.config;
@@ -107,6 +153,22 @@ define([
     var toggle_all = function() {
         plugin_status = !plugin_status;
         change_button_color();
+        if(plugin_status){      
+            console.log(JSON.stringify(stack));            
+            for(var i in stack ) {
+                var input_area = stack[i].element.find('.input_area');
+                input_area[0].title=1;
+                create_blink(i);    
+            }
+        } else{
+            for(var i in stack){
+                var input_area = stack[i].element.find('.input_area');
+                input_area.stop(true,false);
+                input_area[0].title=0;
+                input_area[0].style.opacity = 1;
+                input_area[0].style.backgroundColor = "#F7F7F7";              
+            }           
+        }
     };
 
     var change_button_color = function() {
@@ -129,8 +191,6 @@ define([
         handler: toggle_all
     };
     var action_full_name;
-
-
 
     function load_jupyter_extension () {
         
@@ -159,7 +219,11 @@ define([
             });
         }
 
-        Jupyter.notebook.config.loaded.then(function () {
+        Jupyter.notebook.config.loaded.then(function on_config_loaded () {
+            $.extend(true, params, Jupyter.notebook.config.data[mod_name]);
+        }, function on_config_load_error (reason) {
+            console.warn(log_prefix, 'Using defaults after error loading config:', reason);
+        }).then(function () {
 
             patch_CodeCell_get_callbacks();
             events.on('execute.CodeCell', excute_codecell_callback);
